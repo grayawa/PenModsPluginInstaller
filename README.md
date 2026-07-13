@@ -85,6 +85,7 @@ device:
 
 ```bash
 penmods-plugin inspect ./plugin.zip
+penmods-plugin inspect ./plugin-folder
 penmods-plugin install ./plugin.zip
 penmods-plugin install ./plugin-folder
 penmods-plugin list
