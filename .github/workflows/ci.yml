@@ -10,6 +10,7 @@ on:
 env:
   BUILD_MODE: debug
   GCC_BASE_URL: https://github.com/Redbeanw44602/aarch64-linux-gnu-gcc-6.5.0/releases/download/6.5.0
+  XMAKE_ROOT: y
 
 jobs:
   build:
