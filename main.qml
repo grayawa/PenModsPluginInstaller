@@ -379,6 +379,13 @@ Rectangle {
                 }
             }
 
+            Rectangle {
+                width: parent.width; height: 22; radius: 4; color: "#e74c3c"
+                visible: root.queueList.length > 0
+                Text { anchors.centerIn: parent; text: "清空队列"; color: "#fff"; font.pixelSize: 11 }
+                MouseArea { anchors.fill: parent; onClicked: backend.clearQueue() }
+            }
+
             Item { height: 4; width: 1 }
 
             ListView {

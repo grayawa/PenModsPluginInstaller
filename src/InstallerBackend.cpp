@@ -856,6 +856,17 @@ void InstallerBackend::cancelQueueItem(const QString &pluginId, const QString &t
     emit installedPluginsChanged();
 }
 
+void InstallerBackend::clearQueue()
+{
+    if (!m_database.isOpen()) return;
+    QSqlQuery q(m_database);
+    q.exec(QStringLiteral("DELETE FROM install_queue WHERE status IN ('queued', 'pending', 'waiting-dependencies', 'failed')"));
+    q.exec(QStringLiteral("DELETE FROM core_updates WHERE status IN ('pending')"));
+    q.exec(QStringLiteral("DELETE FROM dependency_queue WHERE status IN ('pending')"));
+    emit installStateChanged();
+    emit installedPluginsChanged();
+}
+
 void InstallerBackend::executeQueueItem(const QString &pluginId)
 {
     setStatusText(QStringLiteral("Executing: %1").arg(pluginId));
