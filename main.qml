@@ -9,7 +9,7 @@ Rectangle {
     height: 170
     color: "#0f141b"
 
-    property string registryUrl: "https://example.invalid/plugins.json"
+    property string registryUrl: "https://grayawa.github.io/PenModsPluginIndex/data/plugins.json"
     property var registryPlugins: backend.plugins
     property var filteredPlugins: []
     property string selectedPluginId: ""
@@ -17,6 +17,8 @@ Rectangle {
     property string searchText: ""
     property string planText: backend.installPlanText(selectedPluginId)
     property string actionLabel: "安装"
+
+    signal backButtonClicked()
 
     InstallerBackend {
         id: backend
