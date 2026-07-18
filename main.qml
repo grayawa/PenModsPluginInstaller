@@ -16,6 +16,7 @@ Rectangle {
     property var installedList: backend.installedPlugins()
     property string selectedPluginId: ""
     property string statusText: backend.statusText
+    property string searchText: ""
     property string planText: backend.installPlanText(selectedPluginId)
     property string actionLabel: "安装"
     property string viewMode: "registry"
