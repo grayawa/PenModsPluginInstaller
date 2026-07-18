@@ -559,6 +559,22 @@ bool InstallerBackend::isInstalled(const QString &pluginId) const
     return installedPluginIds().contains(pluginId);
 }
 
+bool InstallerBackend::isUpdateAvailable(const QString &pluginId) const
+{
+    if (!m_database.isOpen()) return false;
+
+    QSqlQuery query(m_database);
+    query.prepare(QStringLiteral("SELECT installed_version FROM installed_plugins WHERE plugin_id = ?"));
+    query.addBindValue(pluginId);
+    if (!query.exec() || !query.next()) return false;
+
+    const auto installedVersion = query.value(0).toString();
+    const auto *plugin = findPlugin(pluginId);
+    if (!plugin || plugin->version.isEmpty()) return false;
+
+    return installedVersion != plugin->version;
+}
+
 QVariantList InstallerBackend::installedPlugins() const
 {
     QVariantList list;
