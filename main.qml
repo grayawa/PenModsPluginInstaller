@@ -101,47 +101,31 @@ Rectangle {
 
     // ═══════════ layout ═══════════
 
-    // ── tab bar ──
-    Rectangle {
-        id: tabBar
-        anchors.top: parent.top; anchors.topMargin: 4
-        anchors.left: parent.left; anchors.leftMargin: 4; anchors.right: parent.right; anchors.rightMargin: 4
-        height: 28; color: "#17202b"; radius: 6
+    // ── left tabs ──
+    Column {
+        id: leftTabs
+        anchors.top: parent.top; anchors.topMargin: 4; anchors.left: parent.left; anchors.leftMargin: 4
+        width: 48; spacing: 4
 
         Rectangle {
-            y: parent.height - 2; height: 2
-            anchors.left: parent.left; anchors.right: parent.right
-            color: "#243243"
+            width: 48; height: 28; radius: 4
+            color: viewMode === "registry" ? "#2f6fed" : "#1a2330"
+            Text { anchors.centerIn: parent; text: "注册表"; color: viewMode === "registry" ? "#fff" : "#9cb0c5"; font.pixelSize: 10 }
+            MouseArea { anchors.fill: parent; onClicked: { root.viewMode = "registry"; root.refreshPlan() } }
         }
-
-        Row {
-            anchors.left: parent.left; anchors.leftMargin: 4
-            anchors.verticalCenter: parent.verticalCenter
-            Rectangle {
-                width: 62; height: 22; radius: 4
-                color: viewMode === "registry" ? "#2f6fed" : "transparent"
-                Text { anchors.centerIn: parent; text: "注册表"; color: viewMode === "registry" ? "#fff" : "#9cb0c5"; font.pixelSize: 10 }
-                MouseArea { anchors.fill: parent; onClicked: { root.viewMode = "registry"; root.refreshPlan() } }
-            }
-            Rectangle {
-                width: 62; height: 22; radius: 4
-                color: viewMode === "installed" ? "#2f6fed" : "transparent"
-                Text { anchors.centerIn: parent; text: "已安装"; color: viewMode === "installed" ? "#fff" : "#9cb0c5"; font.pixelSize: 10 }
-                MouseArea { anchors.fill: parent; onClicked: { root.viewMode = "installed"; root.refreshInstalled() } }
-            }
-        }
-
-        Text {
-            anchors.right: parent.right; anchors.rightMargin: 8; anchors.verticalCenter: parent.verticalCenter
-            text: root.statusText; color: "#9cb0c5"; font.pixelSize: 9; elide: Text.ElideRight
+        Rectangle {
+            width: 48; height: 28; radius: 4
+            color: viewMode === "installed" ? "#2f6fed" : "#1a2330"
+            Text { anchors.centerIn: parent; text: "已安装"; color: viewMode === "installed" ? "#fff" : "#9cb0c5"; font.pixelSize: 10 }
+            MouseArea { anchors.fill: parent; onClicked: { root.viewMode = "installed"; root.refreshInstalled() } }
         }
     }
 
-    // ── search bar ──
+    // ── search ──
     Rectangle {
         id: searchBox
-        anchors.top: tabBar.bottom; anchors.topMargin: 4
-        anchors.left: parent.left; anchors.leftMargin: 4; anchors.right: parent.right; anchors.rightMargin: 4
+        anchors.top: parent.top; anchors.topMargin: 4
+        anchors.left: leftTabs.right; anchors.leftMargin: 4; anchors.right: parent.right; anchors.rightMargin: 4
         height: 26; color: "#111821"; radius: 4; border.color: "#243243"
         visible: viewMode === "registry"
 
@@ -157,58 +141,47 @@ Rectangle {
         }
     }
 
-    // ── body ──
+    // ── body: registry view ──
     Row {
-        anchors.top: viewMode === "registry" ? searchBox.bottom : tabBar.bottom
-        anchors.topMargin: 4
-        anchors.left: parent.left; anchors.leftMargin: 4
+        visible: viewMode === "registry"
+        anchors.top: searchBox.bottom; anchors.topMargin: 4
+        anchors.left: leftTabs.right; anchors.leftMargin: 4
         anchors.right: parent.right; anchors.rightMargin: 4
         anchors.bottom: parent.bottom; anchors.bottomMargin: 4
         spacing: 4
 
         // ── left: plugin list ──
         Rectangle {
-            width: viewMode === "registry" ? 114 : (parent.width > 0 ? parent.width : 260)
-            height: parent.height; color: "#17202b"; radius: 6; clip: true
-
+            width: 114; height: parent.height; color: "#17202b"; radius: 6; clip: true
             ListView {
                 id: pluginList; anchors.fill: parent; anchors.margins: 2
-                model: viewMode === "registry" ? root.filteredPlugins : root.installedList
+                model: root.filteredPlugins
                 delegate: Rectangle {
                     width: pluginList.width; height: 24; radius: 4
-                    color: (viewMode === "registry" && modelData.id === root.selectedPluginId) ? "#2f6fed" : "transparent"
+                    color: modelData.id === root.selectedPluginId ? "#2f6fed" : "transparent"
                     Row {
                         anchors.fill: parent; anchors.leftMargin: 5; anchors.rightMargin: 3; spacing: 3
                         Text {
-                            anchors.verticalCenter: parent.verticalCenter
-                            width: viewMode === "installed" ? parent.width - 48 : parent.width - 14
+                            anchors.verticalCenter: parent.verticalCenter; width: parent.width - 14
                             elide: Text.ElideRight
-                            text: viewMode === "registry" ? modelData.name : (modelData.name || modelData.id)
-                            color: "#f5f7fa"; font.pixelSize: 10
+                            text: modelData.name; color: "#f5f7fa"; font.pixelSize: 10
                         }
                         Text {
                             anchors.verticalCenter: parent.verticalCenter
-                            visible: viewMode === "registry" && backend.isInstalled(modelData.id)
+                            visible: backend.isInstalled(modelData.id)
                             text: "✓"; color: "#4ade80"; font.pixelSize: 10; font.bold: true
-                        }
-                        Rectangle {
-                            anchors.verticalCenter: parent.verticalCenter; width: 38; height: 16; radius: 3
-                            visible: viewMode === "installed"; color: "#c0392b"
-                            Text { anchors.centerIn: parent; text: "卸载"; color: "#f5f7fa"; font.pixelSize: 9 }
-                            MouseArea { anchors.fill: parent; onClicked: { backend.uninstallPlugin(modelData.id) } }
                         }
                     }
                     MouseArea {
-                        anchors.fill: parent; visible: viewMode === "registry"
+                        anchors.fill: parent
                         onClicked: { root.selectedPluginId = modelData.id; root.refreshPlan() }
                     }
                 }
             }
         }
 
-        // ── right: detail (registry only) ──
+        // ── right: detail ──
         Rectangle {
-            visible: viewMode === "registry"
             width: parent.width - 118; height: parent.height
             color: "#17202b"; radius: 6; border.color: "#243243"
 
@@ -242,7 +215,7 @@ Rectangle {
                 id: planFlick
                 anchors.top: detailSummary.bottom; anchors.topMargin: 2
                 anchors.left: parent.left; anchors.leftMargin: 5; anchors.right: parent.right; anchors.rightMargin: 5
-                anchors.bottom: btnRow.top; anchors.bottomMargin: 2
+                anchors.bottom: btnRowReg.top; anchors.bottomMargin: 2
                 clip: true; contentWidth: width; contentHeight: planTextInner.height + 4
                 Rectangle {
                     width: parent.width; height: Math.max(parent.height, planTextInner.height + 4)
@@ -258,11 +231,10 @@ Rectangle {
             }
 
             Row {
-                id: btnRow
+                id: btnRowReg
                 anchors.bottom: parent.bottom; anchors.bottomMargin: 3
                 anchors.left: parent.left; anchors.leftMargin: 5; anchors.right: parent.right; anchors.rightMargin: 5
                 height: 18; spacing: 4
-
                 Rectangle {
                     width: parent.width / 2 - 2; height: 18; radius: 4; color: "#1d2b3a"; border.color: "#243243"
                     Text { anchors.centerIn: parent; text: "刷新"; color: "#f5f7fa"; font.pixelSize: 9 }
@@ -275,6 +247,65 @@ Rectangle {
                     border.color: "#243243"; opacity: root.currentPlugin ? 1 : 0.5
                     Text { anchors.centerIn: parent; text: root.actionLabel; color: "#f5f7fa"; font.pixelSize: 9 }
                     MouseArea { anchors.fill: parent; enabled: root.currentPlugin !== null; onClicked: root.runInstallAction() }
+                }
+            }
+        }
+    }
+
+    // ── body: installed view ──
+    Rectangle {
+        visible: viewMode === "installed"
+        anchors.top: parent.top; anchors.topMargin: 4
+        anchors.left: leftTabs.right; anchors.leftMargin: 4
+        anchors.right: parent.right; anchors.rightMargin: 4
+        anchors.bottom: parent.bottom; anchors.bottomMargin: 4
+        color: "#17202b"; radius: 6; clip: true
+
+        Column {
+            anchors.fill: parent; anchors.margins: 4; spacing: 0
+
+            Text {
+                width: parent.width; color: "#f5f7fa"; font.pixelSize: 12; font.bold: true
+                text: "已安装插件 (" + root.installedList.length + ")"
+            }
+
+            Item { height: 4; width: 1 }
+
+            ListView {
+                width: parent.width; height: parent.height - 28
+                model: root.installedList; clip: true
+                delegate: Rectangle {
+                    width: parent.width; height: 42; radius: 4
+                    color: index % 2 === 0 ? "#1a2330" : "transparent"
+
+                    Rectangle {
+                        anchors.left: parent.left; anchors.leftMargin: 6
+                        anchors.right: parent.right; anchors.rightMargin: 6
+                        anchors.verticalCenter: parent.verticalCenter; height: 34
+
+                        Row {
+                            anchors.fill: parent; spacing: 8
+                            Column {
+                                width: parent.width - 52; anchors.verticalCenter: parent.verticalCenter; spacing: 1
+                                Text {
+                                    width: parent.width
+                                    text: modelData.name || modelData.id
+                                    color: "#f5f7fa"; font.pixelSize: 10; font.bold: true; elide: Text.ElideRight
+                                }
+                                Text {
+                                    width: parent.width
+                                    text: modelData.id + "  " + (modelData.version || "")
+                                    color: "#7a8b9e"; font.pixelSize: 8; elide: Text.ElideRight
+                                }
+                            }
+                            Rectangle {
+                                width: 44; height: 22; radius: 4; color: "#c0392b"
+                                anchors.verticalCenter: parent.verticalCenter
+                                Text { anchors.centerIn: parent; text: "卸载"; color: "#f5f7fa"; font.pixelSize: 9 }
+                                MouseArea { anchors.fill: parent; onClicked: { backend.uninstallPlugin(modelData.id) } }
+                            }
+                        }
+                    }
                 }
             }
         }
