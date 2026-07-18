@@ -372,19 +372,33 @@ Rectangle {
                     width: parent.width; height: 36; radius: 4
                     color: index % 2 === 0 ? "#1a2330" : "transparent"
                     Row {
-                        anchors.fill: parent; anchors.leftMargin: 10; anchors.rightMargin: 10; spacing: 8
+                        anchors.fill: parent; anchors.leftMargin: 8; anchors.rightMargin: 4; spacing: 6
                         Text {
-                            anchors.verticalCenter: parent.verticalCenter
+                            width: parent.width - 100; anchors.verticalCenter: parent.verticalCenter
                             text: {
                                 var op = modelData.type === "core-update" ? "更新核心" : "安装"
                                 return op + ": " + modelData.id
                             }
-                            color: "#f5f7fa"; font.pixelSize: 12; elide: Text.ElideRight
+                            color: "#f5f7fa"; font.pixelSize: 11; elide: Text.ElideRight
                         }
                         Text {
-                            anchors.verticalCenter: parent.verticalCenter; font.pixelSize: 11
+                            anchors.verticalCenter: parent.verticalCenter; font.pixelSize: 10
                             text: modelData.status === "failed" ? "失败" : (modelData.status === "queued" || modelData.status === "pending" ? "等待" : modelData.status)
                             color: modelData.status === "failed" ? "#e74c3c" : (modelData.status === "queued" || modelData.status === "pending" ? "#f39c12" : "#4ade80")
+                        }
+                        Rectangle {
+                            anchors.verticalCenter: parent.verticalCenter; width: 36; height: 20; radius: 4
+                            visible: modelData.status === "queued" || modelData.status === "pending"
+                            color: "#2f6fed"
+                            Text { anchors.centerIn: parent; text: "执行"; color: "#fff"; font.pixelSize: 9 }
+                            MouseArea { anchors.fill: parent; onClicked: { backend.executeQueueItem(modelData.id) } }
+                        }
+                        Rectangle {
+                            anchors.verticalCenter: parent.verticalCenter; width: 18; height: 18; radius: 9
+                            visible: modelData.status === "queued" || modelData.status === "pending"
+                            color: "#e74c3c"
+                            Text { anchors.centerIn: parent; text: "✕"; color: "#fff"; font.pixelSize: 9 }
+                            MouseArea { anchors.fill: parent; onClicked: { backend.cancelQueueItem(modelData.id, modelData.type || "install") } }
                         }
                     }
                 }

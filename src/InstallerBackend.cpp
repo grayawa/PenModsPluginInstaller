@@ -191,7 +191,8 @@ void InstallerBackend::install(const QString &pluginId)
         emit installStateChanged();
         return;
     }
-    performInstall(pluginId);
+    setStatusText(QStringLiteral("Queued: %1").arg(plugin->id));
+    emit installStateChanged();
 }
 
 void InstallerBackend::prepareCoreUpdate(const QString &pluginId)
@@ -338,6 +339,13 @@ bool InstallerBackend::queueCoreUpdate(const PluginEntry &entry, const QString &
         return false;
     }
 
+    QSqlQuery dup(m_database);
+    dup.prepare(QStringLiteral("SELECT id FROM core_updates WHERE core_id = ? AND status IN ('pending') LIMIT 1"));
+    dup.addBindValue(entry.id);
+    if (dup.exec() && dup.next()) {
+        return true;
+    }
+
     QSqlQuery query(m_database);
     query.prepare(QStringLiteral("INSERT INTO core_updates (core_id, target_version, package_url, target_path, strategy, requires_restart, status, error_message) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"));
     query.addBindValue(entry.id);
@@ -404,6 +412,13 @@ bool InstallerBackend::queueInstall(const PluginEntry &entry, const QString &sta
     if (!m_database.isOpen()) {
         setStatusText(QStringLiteral("Database is not open"));
         return false;
+    }
+
+    QSqlQuery dup(m_database);
+    dup.prepare(QStringLiteral("SELECT job_id FROM install_queue WHERE plugin_id = ? AND status IN ('queued', 'pending') LIMIT 1"));
+    dup.addBindValue(entry.id);
+    if (dup.exec() && dup.next()) {
+        return true;
     }
 
     QSqlQuery query(m_database);
@@ -599,6 +614,14 @@ void InstallerBackend::performInstall(const QString &pluginId)
         return;
     }
 
+    QSqlQuery dup(m_database);
+    dup.prepare(QStringLiteral("SELECT job_id FROM install_queue WHERE plugin_id = ? AND status IN ('queued', 'pending') LIMIT 1"));
+    dup.addBindValue(pluginId);
+    if (dup.exec() && dup.next()) {
+        setStatusText(QStringLiteral("%1 is already queued").arg(pluginId));
+        return;
+    }
+
     const auto url = plugin->downloadUrl.isEmpty() ? plugin->distributionUrl : plugin->downloadUrl;
     if (url.isEmpty()) {
         queueInstall(*plugin, QStringLiteral("failed"), QStringLiteral("No download URL"));
@@ -724,6 +747,11 @@ void InstallerBackend::installFromData(const QString &pluginId, const QString &f
             ins.exec();
 
             setStatusText(QStringLiteral("Installed: %1 v%2").arg(pluginId, plugin->version));
+
+            QSqlQuery upd(m_database);
+            upd.prepare(QStringLiteral("UPDATE install_queue SET status = 'installed', finished_at = CURRENT_TIMESTAMP WHERE plugin_id = ? AND status = 'queued'"));
+            upd.addBindValue(pluginId);
+            upd.exec();
         }
         tmpDir.setAutoRemove(true);
     } else {
@@ -810,6 +838,28 @@ QVariantList InstallerBackend::installQueue() const
     }
 
     return list;
+}
+
+void InstallerBackend::cancelQueueItem(const QString &pluginId, const QString &type)
+{
+    if (!m_database.isOpen()) return;
+
+    QSqlQuery q(m_database);
+    if (type == QStringLiteral("core-update")) {
+        q.prepare(QStringLiteral("DELETE FROM core_updates WHERE core_id = ? AND status IN ('pending')"));
+    } else {
+        q.prepare(QStringLiteral("DELETE FROM install_queue WHERE plugin_id = ? AND status IN ('queued', 'pending', 'waiting-dependencies')"));
+    }
+    q.addBindValue(pluginId);
+    q.exec();
+    emit installStateChanged();
+    emit installedPluginsChanged();
+}
+
+void InstallerBackend::executeQueueItem(const QString &pluginId)
+{
+    setStatusText(QStringLiteral("Executing: %1").arg(pluginId));
+    performInstall(pluginId);
 }
 
 void InstallerBackend::uninstallPlugin(const QString &pluginId)

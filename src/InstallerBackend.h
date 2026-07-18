@@ -40,6 +40,8 @@ public:
     Q_INVOKABLE bool isUpdateAvailable(const QString &pluginId) const;
     Q_INVOKABLE QVariantList installedPlugins() const;
     Q_INVOKABLE QVariantList installQueue() const;
+    Q_INVOKABLE void cancelQueueItem(const QString &pluginId, const QString &type);
+    Q_INVOKABLE void executeQueueItem(const QString &pluginId);
     Q_INVOKABLE void uninstallPlugin(const QString &pluginId);
 
 signals:
