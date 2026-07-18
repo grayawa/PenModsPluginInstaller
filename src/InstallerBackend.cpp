@@ -641,7 +641,17 @@ void InstallerBackend::performInstall(const QString &pluginId)
 
         if (reply->error() != QNetworkReply::NoError) {
             const auto *plugin = findPlugin(pluginId);
-            if (plugin) queueInstall(*plugin, QStringLiteral("failed"), reply->errorString());
+            if (plugin) {
+                if (plugin->kind == QStringLiteral("core")) {
+                    QSqlQuery upd(m_database);
+                    upd.prepare(QStringLiteral("UPDATE core_updates SET status = 'failed', error_message = ? WHERE core_id = ? AND status = 'installing'"));
+                    upd.addBindValue(reply->errorString());
+                    upd.addBindValue(pluginId);
+                    upd.exec();
+                } else {
+                    queueInstall(*plugin, QStringLiteral("failed"), reply->errorString());
+                }
+            }
             setStatusText(QStringLiteral("Download failed: %1").arg(reply->errorString()));
             emit installStateChanged();
             return;
