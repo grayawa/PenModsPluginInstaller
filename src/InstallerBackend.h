@@ -63,6 +63,7 @@ private:
     void loadRegistryCache();
     void cacheRegistryEntry(const PluginEntry &entry);
     void performInstall(const QString &pluginId);
+    void performInstallWithUrl(const QString &pluginId, const QString &folderName, const QUrl &url);
     void installFromData(const QString &pluginId, const QString &folderName, const QByteArray &data);
     bool queueInstall(const PluginEntry &entry, const QString &status, const QString &errorMessage = QString());
     bool queueCoreUpdate(const PluginEntry &entry, const QString &status = QStringLiteral("pending"), const QString &errorMessage = QString());

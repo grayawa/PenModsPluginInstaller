@@ -622,9 +622,68 @@ void InstallerBackend::performInstall(const QString &pluginId)
         return;
     }
 
-    const auto url = plugin->downloadUrl.isEmpty() ? plugin->distributionUrl : plugin->downloadUrl;
+    const QString url = plugin->downloadUrl.isEmpty() ? plugin->distributionUrl : plugin->downloadUrl;
+    const QString folderName = folderNameForId(pluginId);
+
+    if (url.contains(QStringLiteral("github.com")) && url.contains(QStringLiteral("/releases"))) {
+        QString apiUrl = QString(url).replace(QStringLiteral("https://github.com/"), QStringLiteral("https://api.github.com/repos/"));
+        if (apiUrl.endsWith(QStringLiteral("/latest")))
+            apiUrl = apiUrl.left(apiUrl.length() - 7);
+        if (!apiUrl.endsWith(QStringLiteral("/releases")))
+            apiUrl = apiUrl.left(apiUrl.indexOf(QStringLiteral("/releases")) + 9);
+        apiUrl += QStringLiteral("/latest");
+
+        setStatusText(QStringLiteral("Resolving release for %1...").arg(pluginId));
+        QNetworkRequest apiReq;
+        apiReq.setUrl(QUrl(apiUrl));
+        apiReq.setRawHeader("User-Agent", "PenModsPluginInstaller/1.0");
+        apiReq.setRawHeader("Accept", "application/vnd.github.v3+json");
+        auto *apiReply = m_network.get(apiReq);
+        m_activeDownloads[pluginId] = apiReply;
+        connect(apiReply, &QNetworkReply::finished, this, [this, apiReply, pluginId, folderName, url]() {
+            apiReply->deleteLater();
+            m_activeDownloads.remove(pluginId);
+
+            QUrl resolved(url);
+            if (apiReply->error() == QNetworkReply::NoError) {
+                const auto doc = QJsonDocument::fromJson(apiReply->readAll());
+                const auto assets = doc.object().value(QStringLiteral("assets")).toArray();
+                const auto *plugin = findPlugin(pluginId);
+                for (const auto &asset : assets) {
+                    const auto obj = asset.toObject();
+                    const auto name = obj.value(QStringLiteral("name")).toString();
+                    if (plugin && plugin->kind == QStringLiteral("core") && name.contains(QStringLiteral("libPenMods"), Qt::CaseInsensitive)) {
+                        resolved = QUrl(obj.value(QStringLiteral("browser_download_url")).toString());
+                        break;
+                    }
+                    if (name.endsWith(QStringLiteral(".zip"), Qt::CaseInsensitive)) {
+                        resolved = QUrl(obj.value(QStringLiteral("browser_download_url")).toString());
+                        break;
+                    }
+                }
+            }
+            performInstallWithUrl(pluginId, folderName, resolved);
+        });
+        return;
+    }
+
+    performInstallWithUrl(pluginId, folderName, QUrl(url));
+}
+
+void InstallerBackend::performInstallWithUrl(const QString &pluginId, const QString &folderName, const QUrl &url)
+{
+    const auto *plugin = findPlugin(pluginId);
+    if (!plugin) return;
+
     if (url.isEmpty()) {
-        queueInstall(*plugin, QStringLiteral("failed"), QStringLiteral("No download URL"));
+        if (plugin->kind == QStringLiteral("core")) {
+            QSqlQuery upd(m_database);
+            upd.prepare(QStringLiteral("UPDATE core_updates SET status = 'failed', error_message = 'No download URL' WHERE core_id = ? AND status = 'installing'"));
+            upd.addBindValue(pluginId);
+            upd.exec();
+        } else {
+            queueInstall(*plugin, QStringLiteral("failed"), QStringLiteral("No download URL"));
+        }
         setStatusText(QStringLiteral("No download URL for %1").arg(pluginId));
         emit installStateChanged();
         return;
@@ -632,8 +691,7 @@ void InstallerBackend::performInstall(const QString &pluginId)
 
     setStatusText(QStringLiteral("Downloading %1...").arg(pluginId));
 
-    const auto folderName = folderNameForId(pluginId);
-    auto *reply = m_network.get(QNetworkRequest(QUrl(url)));
+    auto *reply = m_network.get(QNetworkRequest(url));
     m_activeDownloads[pluginId] = reply;
     connect(reply, &QNetworkReply::finished, this, [this, reply, pluginId, folderName]() {
         reply->deleteLater();
