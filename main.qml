@@ -101,31 +101,47 @@ Rectangle {
 
     // ═══════════ layout ═══════════
 
-    // ── left tab column ──
-    Column {
-        id: leftTabs
-        anchors.top: parent.top; anchors.topMargin: 4; anchors.left: parent.left; anchors.leftMargin: 4
-        width: 48; spacing: 4
+    // ── tab bar ──
+    Rectangle {
+        id: tabBar
+        anchors.top: parent.top; anchors.topMargin: 4
+        anchors.left: parent.left; anchors.leftMargin: 4; anchors.right: parent.right; anchors.rightMargin: 4
+        height: 28; color: "#17202b"; radius: 6
 
         Rectangle {
-            width: 48; height: 28; radius: 4
-            color: viewMode === "registry" ? "#2f6fed" : "#1a2330"
-            Text { anchors.centerIn: parent; text: "注册表"; color: "#f5f7fa"; font.pixelSize: 10 }
-            MouseArea { anchors.fill: parent; onClicked: { root.viewMode = "registry"; root.refreshPlan() } }
+            y: parent.height - 2; height: 2
+            anchors.left: parent.left; anchors.right: parent.right
+            color: "#243243"
         }
-        Rectangle {
-            width: 48; height: 28; radius: 4
-            color: viewMode === "installed" ? "#2f6fed" : "#1a2330"
-            Text { anchors.centerIn: parent; text: "已安装"; color: "#f5f7fa"; font.pixelSize: 10 }
-            MouseArea { anchors.fill: parent; onClicked: { root.viewMode = "installed"; root.refreshInstalled() } }
+
+        Row {
+            anchors.left: parent.left; anchors.leftMargin: 4
+            anchors.verticalCenter: parent.verticalCenter
+            Rectangle {
+                width: 62; height: 22; radius: 4
+                color: viewMode === "registry" ? "#2f6fed" : "transparent"
+                Text { anchors.centerIn: parent; text: "注册表"; color: viewMode === "registry" ? "#fff" : "#9cb0c5"; font.pixelSize: 10 }
+                MouseArea { anchors.fill: parent; onClicked: { root.viewMode = "registry"; root.refreshPlan() } }
+            }
+            Rectangle {
+                width: 62; height: 22; radius: 4
+                color: viewMode === "installed" ? "#2f6fed" : "transparent"
+                Text { anchors.centerIn: parent; text: "已安装"; color: viewMode === "installed" ? "#fff" : "#9cb0c5"; font.pixelSize: 10 }
+                MouseArea { anchors.fill: parent; onClicked: { root.viewMode = "installed"; root.refreshInstalled() } }
+            }
+        }
+
+        Text {
+            anchors.right: parent.right; anchors.rightMargin: 8; anchors.verticalCenter: parent.verticalCenter
+            text: root.statusText; color: "#9cb0c5"; font.pixelSize: 9; elide: Text.ElideRight
         }
     }
 
     // ── search bar ──
     Rectangle {
         id: searchBox
-        anchors.top: parent.top; anchors.topMargin: 4
-        anchors.left: leftTabs.right; anchors.leftMargin: 4; anchors.right: parent.right; anchors.rightMargin: 4
+        anchors.top: tabBar.bottom; anchors.topMargin: 4
+        anchors.left: parent.left; anchors.leftMargin: 4; anchors.right: parent.right; anchors.rightMargin: 4
         height: 26; color: "#111821"; radius: 4; border.color: "#243243"
         visible: viewMode === "registry"
 
@@ -143,10 +159,9 @@ Rectangle {
 
     // ── body ──
     Row {
-        anchors.top: viewMode === "registry" ? searchBox.bottom : leftTabs.top
-        anchors.topMargin: viewMode === "registry" ? 4 : 0
-        anchors.left: viewMode === "registry" ? leftTabs.right : leftTabs.left
-        anchors.leftMargin: 4
+        anchors.top: viewMode === "registry" ? searchBox.bottom : tabBar.bottom
+        anchors.topMargin: 4
+        anchors.left: parent.left; anchors.leftMargin: 4
         anchors.right: parent.right; anchors.rightMargin: 4
         anchors.bottom: parent.bottom; anchors.bottomMargin: 4
         spacing: 4
