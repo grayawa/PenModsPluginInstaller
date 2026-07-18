@@ -363,7 +363,23 @@ Rectangle {
                 text: "操作队列 (" + root.queueList.length + ")"
             }
 
-            Item { height: 6; width: 1 }
+            Rectangle {
+                width: parent.width; height: 26; radius: 4; color: "#2f6fed"
+                visible: root.queueList.some(function(q) { return q.status === "queued" || q.status === "pending" })
+                Text { anchors.centerIn: parent; text: "执行全部"; color: "#fff"; font.pixelSize: 12 }
+                MouseArea {
+                    anchors.fill: parent
+                    onClicked: {
+                        for (var i = 0; i < root.queueList.length; i++) {
+                            var q = root.queueList[i]
+                            if (q.status === "queued" || q.status === "pending")
+                                backend.executeQueueItem(q.id)
+                        }
+                    }
+                }
+            }
+
+            Item { height: 4; width: 1 }
 
             ListView {
                 width: parent.width; height: parent.height - 34
@@ -385,13 +401,6 @@ Rectangle {
                             anchors.verticalCenter: parent.verticalCenter; font.pixelSize: 10
                             text: modelData.status === "failed" ? "失败" : (modelData.status === "queued" || modelData.status === "pending" ? "等待" : modelData.status)
                             color: modelData.status === "failed" ? "#e74c3c" : (modelData.status === "queued" || modelData.status === "pending" ? "#f39c12" : "#4ade80")
-                        }
-                        Rectangle {
-                            anchors.verticalCenter: parent.verticalCenter; width: 36; height: 20; radius: 4
-                            visible: modelData.status === "queued" || modelData.status === "pending"
-                            color: "#2f6fed"
-                            Text { anchors.centerIn: parent; text: "执行"; color: "#fff"; font.pixelSize: 9 }
-                            MouseArea { anchors.fill: parent; onClicked: { backend.executeQueueItem(modelData.id) } }
                         }
                         Rectangle {
                             anchors.verticalCenter: parent.verticalCenter; width: 18; height: 18; radius: 9
