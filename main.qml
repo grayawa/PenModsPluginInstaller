@@ -295,6 +295,7 @@ Rectangle {
                     color: index % 2 === 0 ? "#1a2330" : "transparent"
 
                     Rectangle {
+                        color: "transparent"
                         anchors.left: parent.left; anchors.leftMargin: 6
                         anchors.right: parent.right; anchors.rightMargin: 6
                         anchors.verticalCenter: parent.verticalCenter; height: 34
