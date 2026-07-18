@@ -39,6 +39,7 @@ public:
     Q_INVOKABLE bool isInstalled(const QString &pluginId) const;
     Q_INVOKABLE bool isUpdateAvailable(const QString &pluginId) const;
     Q_INVOKABLE QVariantList installedPlugins() const;
+    Q_INVOKABLE QVariantList installQueue() const;
     Q_INVOKABLE void uninstallPlugin(const QString &pluginId);
 
 signals:
@@ -50,11 +51,14 @@ signals:
 private:
     static QString managedPluginsPath();
     static QString folderNameForId(const QString &pluginId);
+    static void copyDir(const QString &src, const QString &dst);
 
     void setStatusText(const QString &statusText);
     void ensureDatabase();
     void loadRegistryCache();
     void cacheRegistryEntry(const PluginEntry &entry);
+    void performInstall(const QString &pluginId);
+    void installFromData(const QString &pluginId, const QString &folderName, const QByteArray &data);
     bool queueInstall(const PluginEntry &entry, const QString &status, const QString &errorMessage = QString());
     bool queueCoreUpdate(const PluginEntry &entry, const QString &status = QStringLiteral("pending"), const QString &errorMessage = QString());
     bool queueMissingDependencies(const PluginEntry &entry, const DependencyAnalysis &analysis);

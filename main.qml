@@ -61,7 +61,13 @@ Rectangle {
     }
     function runInstallAction() {
         if (!selectedPluginId) { statusText = "没有可安装的插件。"; return }
-        if (backend.isInstalled(selectedPluginId)) { backend.uninstallPlugin(selectedPluginId); return }
+        if (backend.isInstalled(selectedPluginId)) {
+            if (backend.isUpdateAvailable(selectedPluginId)) {
+                statusText = currentPlugin ? (currentPlugin.name + " 有更新，自动更新尚未实现。") : "自动更新尚未实现。";
+                return
+            }
+            backend.uninstallPlugin(selectedPluginId); return
+        }
         var m = backend.installMode(selectedPluginId)
         if (m === "core-update") { backend.prepareCoreUpdate(selectedPluginId); return }
         if (m === "handoff") { backend.openDistribution(selectedPluginId); return }

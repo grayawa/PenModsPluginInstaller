@@ -8,6 +8,8 @@
 #include <QJsonDocument>
 #include <QNetworkReply>
 #include <QNetworkRequest>
+#include <QProcess>
+#include <QTemporaryDir>
 #include <QSqlError>
 #include <QSqlQuery>
 #include <QRegularExpression>
@@ -189,8 +191,7 @@ void InstallerBackend::install(const QString &pluginId)
         emit installStateChanged();
         return;
     }
-    setStatusText(QStringLiteral("Install queued for %1; download/extract implementation belongs in main_so").arg(plugin->id));
-    emit installStateChanged();
+    performInstall(pluginId);
 }
 
 void InstallerBackend::prepareCoreUpdate(const QString &pluginId)
@@ -220,6 +221,21 @@ void InstallerBackend::prepareCoreUpdate(const QString &pluginId)
     }
     setStatusText(QStringLiteral("Core update prepared for %1; copy libPenMods.so then restart").arg(plugin->id));
     emit installStateChanged();
+}
+
+void InstallerBackend::copyDir(const QString &src, const QString &dst)
+{
+    QDir().mkpath(dst);
+    const auto entries = QDir(src).entryInfoList(QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot);
+    for (const auto &info : entries) {
+        const auto srcPath = info.absoluteFilePath();
+        const auto dstPath = dst + QLatin1Char('/') + info.fileName();
+        if (info.isDir()) {
+            copyDir(srcPath, dstPath);
+        } else {
+            QFile::copy(srcPath, dstPath);
+        }
+    }
 }
 
 void InstallerBackend::openDistribution(const QString &pluginId)
@@ -575,6 +591,164 @@ bool InstallerBackend::isUpdateAvailable(const QString &pluginId) const
     return installedVersion != plugin->version;
 }
 
+void InstallerBackend::performInstall(const QString &pluginId)
+{
+    const auto *plugin = findPlugin(pluginId);
+    if (!plugin) {
+        setStatusText(QStringLiteral("Plugin not found: %1").arg(pluginId));
+        return;
+    }
+
+    const auto url = plugin->downloadUrl.isEmpty() ? plugin->distributionUrl : plugin->downloadUrl;
+    if (url.isEmpty()) {
+        queueInstall(*plugin, QStringLiteral("failed"), QStringLiteral("No download URL"));
+        setStatusText(QStringLiteral("No download URL for %1").arg(pluginId));
+        emit installStateChanged();
+        return;
+    }
+
+    setStatusText(QStringLiteral("Downloading %1...").arg(pluginId));
+
+    const auto folderName = folderNameForId(pluginId);
+    auto *reply = m_network.get(QNetworkRequest(QUrl(url)));
+    connect(reply, &QNetworkReply::finished, this, [this, reply, pluginId, folderName]() {
+        reply->deleteLater();
+
+        if (reply->error() != QNetworkReply::NoError) {
+            const auto *plugin = findPlugin(pluginId);
+            if (plugin) queueInstall(*plugin, QStringLiteral("failed"), reply->errorString());
+            setStatusText(QStringLiteral("Download failed: %1").arg(reply->errorString()));
+            emit installStateChanged();
+            return;
+        }
+
+        installFromData(pluginId, folderName, reply->readAll());
+    });
+}
+
+void InstallerBackend::installFromData(const QString &pluginId, const QString &folderName, const QByteArray &data)
+{
+    const auto *plugin = findPlugin(pluginId);
+    if (!plugin) return;
+
+    const bool isCore = plugin->kind == QStringLiteral("core");
+    const bool isZip = data.size() > 4 && static_cast<unsigned char>(data[0]) == 0x50 && static_cast<unsigned char>(data[1]) == 0x4B;
+
+    QTemporaryDir tmpDir;
+    if (!tmpDir.isValid()) {
+        queueInstall(*plugin, QStringLiteral("failed"), QStringLiteral("Cannot create temp dir"));
+        setStatusText(QStringLiteral("Temp dir creation failed"));
+        emit installStateChanged();
+        return;
+    }
+
+    if (isZip) {
+        const auto zipPath = tmpDir.filePath(QStringLiteral("package.zip"));
+        QFile zipFile(zipPath);
+        if (!zipFile.open(QIODevice::WriteOnly) || zipFile.write(data) != data.size()) {
+            queueInstall(*plugin, QStringLiteral("failed"), QStringLiteral("Write temp zip failed"));
+            setStatusText(QStringLiteral("Failed to write temp zip"));
+            emit installStateChanged();
+            return;
+        }
+        zipFile.close();
+
+        const auto extractDir = tmpDir.filePath(QStringLiteral("extract"));
+        QDir().mkpath(extractDir);
+        QProcess unzip;
+        unzip.start(QStringLiteral("unzip"), {QStringLiteral("-o"), zipPath, QStringLiteral("-d"), extractDir});
+        if (!unzip.waitForFinished(30000) || unzip.exitCode() != 0) {
+            queueInstall(*plugin, QStringLiteral("failed"), QStringLiteral("Unzip failed"));
+            setStatusText(QStringLiteral("Unzip failed"));
+            emit installStateChanged();
+            return;
+        }
+
+        tmpDir.setAutoRemove(false);
+        const auto sourceDir = extractDir;
+        if (isCore) {
+            const auto soPath = QDir(sourceDir).filePath(QStringLiteral("libPenMods.so"));
+            const auto targetPath = plugin->updateTargetPath.isEmpty() ? QStringLiteral("/userdata/PenMods/libPenMods.so") : plugin->updateTargetPath;
+            QDir().mkpath(QFileInfo(targetPath).absolutePath());
+            if (QFile::exists(targetPath)) QFile::remove(targetPath);
+            if (!QFile::copy(soPath, targetPath)) {
+                queueCoreUpdate(*plugin, QStringLiteral("failed"), QStringLiteral("Copy libPenMods.so failed"));
+                setStatusText(QStringLiteral("Failed to copy libPenMods.so"));
+            } else {
+                queueCoreUpdate(*plugin, QStringLiteral("pending"));
+                setStatusText(QStringLiteral("Core update staged for %1; restart required").arg(pluginId));
+            }
+        } else {
+            QDir sourceDirObj(sourceDir);
+            const auto entries = sourceDirObj.entryInfoList(QDir::Dirs | QDir::NoDotAndDotDot);
+            auto actualSource = sourceDir;
+            if (entries.size() == 1 && entries[0].isDir()) actualSource = entries[0].absoluteFilePath();
+
+            QFile metadataFile(actualSource + QStringLiteral("/metadata.json"));
+            if (!metadataFile.open(QIODevice::ReadOnly)) {
+                queueInstall(*plugin, QStringLiteral("failed"), QStringLiteral("metadata.json not found in package"));
+                setStatusText(QStringLiteral("metadata.json missing in package"));
+                emit installStateChanged();
+                return;
+            }
+            const auto metadataObj = QJsonDocument::fromJson(metadataFile.readAll()).object();
+            metadataFile.close();
+            if (metadataObj.value(QStringLiteral("id")).toString() != pluginId) {
+                queueInstall(*plugin, QStringLiteral("failed"), QStringLiteral("metadata.json id mismatch"));
+                setStatusText(QStringLiteral("Package id mismatch"));
+                emit installStateChanged();
+                return;
+            }
+
+            const auto targetDir = managedPluginsPath() + QLatin1Char('/') + folderName;
+            const auto stagingDir = targetDir + QStringLiteral(".new");
+            QDir(stagingDir).removeRecursively();
+            QDir().mkpath(stagingDir);
+            copyDir(actualSource, stagingDir);
+
+            QDir oldDir(targetDir);
+            const auto bakDir = targetDir + QStringLiteral(".bak");
+            if (oldDir.exists()) {
+                if (QDir(bakDir).exists()) QDir(bakDir).removeRecursively();
+                oldDir.rename(targetDir, bakDir);
+            }
+            QDir(stagingDir).rename(stagingDir, targetDir);
+            if (QDir(bakDir).exists()) QDir(bakDir).removeRecursively();
+
+            QSqlQuery ins(m_database);
+            ins.prepare(QStringLiteral("INSERT OR REPLACE INTO installed_plugins (plugin_id, folder_name, installed_version, status, metadata_json) VALUES (?, ?, ?, 'installed', ?)"));
+            ins.addBindValue(pluginId);
+            ins.addBindValue(folderName);
+            ins.addBindValue(plugin->version);
+            ins.addBindValue(QString::fromUtf8(QJsonDocument(metadataObj).toJson(QJsonDocument::Compact)));
+            ins.exec();
+
+            setStatusText(QStringLiteral("Installed: %1 v%2").arg(pluginId, plugin->version));
+        }
+        tmpDir.setAutoRemove(true);
+    } else {
+        if (isCore) {
+            const auto targetPath = plugin->updateTargetPath.isEmpty() ? QStringLiteral("/userdata/PenMods/libPenMods.so") : plugin->updateTargetPath;
+            QDir().mkpath(QFileInfo(targetPath).absolutePath());
+            if (QFile::exists(targetPath)) QFile::remove(targetPath);
+            QFile out(targetPath);
+            if (!out.open(QIODevice::WriteOnly) || out.write(data) != data.size()) {
+                queueCoreUpdate(*plugin, QStringLiteral("failed"), QStringLiteral("Write libPenMods.so failed"));
+                setStatusText(QStringLiteral("Failed to write libPenMods.so"));
+            } else {
+                out.close();
+                queueCoreUpdate(*plugin, QStringLiteral("pending"));
+                setStatusText(QStringLiteral("Core update staged for %1; restart required").arg(pluginId));
+            }
+        } else {
+            queueInstall(*plugin, QStringLiteral("failed"), QStringLiteral("Package is not a zip archive"));
+            setStatusText(QStringLiteral("Downloaded file is not a valid zip package"));
+        }
+    }
+
+    emit installStateChanged();
+}
+
 QVariantList InstallerBackend::installedPlugins() const
 {
     QVariantList list;
@@ -601,6 +775,40 @@ QVariantList InstallerBackend::installedPlugins() const
 
         list.append(item);
     }
+    return list;
+}
+
+QVariantList InstallerBackend::installQueue() const
+{
+    QVariantList list;
+    if (!m_database.isOpen()) return list;
+
+    QSqlQuery q(m_database);
+    q.exec(QStringLiteral("SELECT plugin_id, action, status, created_at, error_message FROM install_queue ORDER BY job_id DESC LIMIT 50"));
+    while (q.next()) {
+        QVariantMap item;
+        item[QStringLiteral("id")] = q.value(0);
+        item[QStringLiteral("action")] = q.value(1);
+        item[QStringLiteral("status")] = q.value(2);
+        item[QStringLiteral("created")] = q.value(3);
+        item[QStringLiteral("error")] = q.value(4);
+        item[QStringLiteral("type")] = QStringLiteral("install");
+        list.append(item);
+    }
+
+    QSqlQuery cq(m_database);
+    cq.exec(QStringLiteral("SELECT core_id, target_version, status, created_at, error_message FROM core_updates ORDER BY id DESC LIMIT 50"));
+    while (cq.next()) {
+        QVariantMap item;
+        item[QStringLiteral("id")] = cq.value(0);
+        item[QStringLiteral("version")] = cq.value(1);
+        item[QStringLiteral("status")] = cq.value(2);
+        item[QStringLiteral("created")] = cq.value(3);
+        item[QStringLiteral("error")] = cq.value(4);
+        item[QStringLiteral("type")] = QStringLiteral("core-update");
+        list.append(item);
+    }
+
     return list;
 }
 
