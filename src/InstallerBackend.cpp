@@ -2,6 +2,7 @@
 
 #include <QCryptographicHash>
 #include <QDir>
+#include <QFile>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QNetworkReply>
@@ -499,4 +500,74 @@ const PluginEntry *InstallerBackend::findPlugin(const QString &pluginId) const
         }
     }
     return nullptr;
+}
+
+bool InstallerBackend::isInstalled(const QString &pluginId) const
+{
+    return installedPluginIds().contains(pluginId);
+}
+
+QVariantList InstallerBackend::installedPlugins() const
+{
+    QVariantList list;
+    if (!m_database.isOpen()) {
+        return list;
+    }
+
+    QSqlQuery query(m_database);
+    if (!query.exec(QStringLiteral("SELECT plugin_id, folder_name, installed_version, status, metadata_json FROM installed_plugins ORDER BY plugin_id"))) {
+        return list;
+    }
+
+    while (query.next()) {
+        QVariantMap item;
+        item[QStringLiteral("id")] = query.value(0);
+        item[QStringLiteral("folderName")] = query.value(1);
+        item[QStringLiteral("version")] = query.value(2);
+        item[QStringLiteral("status")] = query.value(3);
+
+        const auto metadataDoc = QJsonDocument::fromJson(query.value(4).toString().toUtf8());
+        const auto metadataObj = metadataDoc.object();
+        item[QStringLiteral("name")] = metadataObj.value(QStringLiteral("name")).toString(query.value(0).toString());
+        item[QStringLiteral("kind")] = metadataObj.value(QStringLiteral("kind")).toString(QStringLiteral("plugin"));
+
+        list.append(item);
+    }
+    return list;
+}
+
+void InstallerBackend::uninstallPlugin(const QString &pluginId)
+{
+    if (!m_database.isOpen()) {
+        setStatusText(QStringLiteral("Database is not open"));
+        return;
+    }
+
+    QSqlQuery query(m_database);
+    query.prepare(QStringLiteral("SELECT folder_name FROM installed_plugins WHERE plugin_id = ?"));
+    query.addBindValue(pluginId);
+    if (!query.exec() || !query.next()) {
+        setStatusText(QStringLiteral("Plugin not found in installed list: %1").arg(pluginId));
+        return;
+    }
+
+    const auto folderName = query.value(0).toString();
+    const auto pluginDir = managedPluginsPath() + QLatin1Char('/') + folderName;
+
+    QDir dir(pluginDir);
+    if (dir.exists()) {
+        dir.removeRecursively();
+    }
+
+    QSqlQuery del(m_database);
+    del.prepare(QStringLiteral("DELETE FROM installed_plugins WHERE plugin_id = ?"));
+    del.addBindValue(pluginId);
+    if (!del.exec()) {
+        setStatusText(QStringLiteral("Failed to remove installed record: %1").arg(del.lastError().text()));
+        return;
+    }
+
+    setStatusText(QStringLiteral("Uninstalled: %1").arg(pluginId));
+    emit installStateChanged();
+    emit installedPluginsChanged();
 }

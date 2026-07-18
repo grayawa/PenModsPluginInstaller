@@ -36,11 +36,15 @@ public:
     Q_INVOKABLE void install(const QString &pluginId);
     Q_INVOKABLE void openDistribution(const QString &pluginId);
     Q_INVOKABLE void prepareCoreUpdate(const QString &pluginId);
+    Q_INVOKABLE bool isInstalled(const QString &pluginId) const;
+    Q_INVOKABLE QVariantList installedPlugins() const;
+    Q_INVOKABLE void uninstallPlugin(const QString &pluginId);
 
 signals:
     void pluginsChanged();
     void statusTextChanged();
     void installStateChanged();
+    void installedPluginsChanged();
 
 private:
     static QString managedPluginsPath();
