@@ -1,7 +1,7 @@
 {
   "id": "com.penmods.plugininstaller",
   "name": "插件安装器",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "author": "grayawa",
   "license": "AGPL-3.0",
   "description": "从 PenMods Plugin Index 搜索、下载并安装插件。",
