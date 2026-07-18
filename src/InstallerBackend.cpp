@@ -2,6 +2,7 @@
 
 #include <QCryptographicHash>
 #include <QDir>
+#include <QDirIterator>
 #include <QFile>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -286,6 +287,31 @@ void InstallerBackend::ensureDatabase()
             setStatusText(QStringLiteral("Database bootstrap failed: %1").arg(query.lastError().text()));
             return;
         }
+    }
+
+    QDirIterator it(kManagedPluginsPath, QDir::Dirs | QDir::NoDotAndDotDot, QDirIterator::NoIteratorFlags);
+    while (it.hasNext()) {
+        it.next();
+        const auto folderName = it.fileName();
+        const auto metadataPath = it.filePath() + QStringLiteral("/metadata.json");
+        QFile metadataFile(metadataPath);
+        if (!metadataFile.open(QIODevice::ReadOnly)) {
+            continue;
+        }
+        const auto metadata = QJsonDocument::fromJson(metadataFile.readAll()).object();
+        metadataFile.close();
+        const auto pluginId = metadata.value(QStringLiteral("id")).toString();
+        if (pluginId.isEmpty()) {
+            continue;
+        }
+        const auto version = metadata.value(QStringLiteral("version")).toString();
+        QSqlQuery ins(m_database);
+        ins.prepare(QStringLiteral("INSERT OR IGNORE INTO installed_plugins (plugin_id, folder_name, installed_version, status, metadata_json) VALUES (?, ?, ?, 'installed', ?)"));
+        ins.addBindValue(pluginId);
+        ins.addBindValue(folderName);
+        ins.addBindValue(version);
+        ins.addBindValue(QString::fromUtf8(QJsonDocument(metadata).toJson(QJsonDocument::Compact)));
+        ins.exec();
     }
 }
 

@@ -90,11 +90,12 @@ Rectangle {
         function inputPageCreated(page) {
             page.backButtonClicked.connect(function() { page.todoDestroy() })
             page.inputFinished.connect(function(content) {
-                root.searchText = content.trim()
+                searchInput_.text = content.trim()
+                root.searchText = searchInput_.text
                 root.applyFilter()
                 page.todoDestroy()
             })
-            page.enterText(root.searchText)
+            page.enterText(searchInput_.text)
             page.show()
         }
     }
@@ -130,14 +131,29 @@ Rectangle {
         visible: viewMode === "registry"
 
         Text {
+            id: searchDisplay
             anchors.verticalCenter: parent.verticalCenter
             anchors.left: parent.left; anchors.leftMargin: 6; anchors.right: parent.right; anchors.rightMargin: 6
             color: root.searchText ? "#f5f7fa" : "#555a65"; font.pixelSize: 11; elide: Text.ElideRight
             text: root.searchText || "搜索插件"
         }
+
+        TextInput { id: searchInput_; visible: false }
+
         MouseArea {
             anchors.fill: parent
-            onClicked: root.showKeyboard()
+            anchors.leftMargin: -8; anchors.rightMargin: -8
+            anchors.topMargin: -6; anchors.bottomMargin: -6
+            onClicked: {
+                var comp = qmlCreateComponent("YInputPage")
+                if (comp.status !== Component.Ready) return
+                var inc = comp.incubateObject(keyboardHelper.containerItem)
+                if (inc.status !== Component.Ready) {
+                    inc.onStatusChanged = function(s) { if (s === Component.Ready) keyboardHelper.inputPageCreated(inc.object) }
+                } else {
+                    keyboardHelper.inputPageCreated(inc.object)
+                }
+            }
         }
     }
 
