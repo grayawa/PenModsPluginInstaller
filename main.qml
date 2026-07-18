@@ -12,6 +12,12 @@ Rectangle {
     property var filteredPlugins: []
     property var installedList: backend.installedPlugins()
     property var queueList: backend.installQueue()
+    property string queueCount: {
+        var c = 0
+        for (var i = 0; i < queueList.length; i++)
+            if (queueList[i].status === "queued" || queueList[i].status === "pending") c++
+        return c > 0 ? "(" + c + ")" : ""
+    }
     property string selectedPluginId: ""
     property string statusText: backend.statusText
     property string searchText: ""
@@ -134,7 +140,7 @@ Rectangle {
         Rectangle {
             width: 54; height: 32; radius: 4
             color: viewMode === "queue" ? "#2f6fed" : "#1a2330"
-            Text { anchors.centerIn: parent; text: "队列"; color: viewMode === "queue" ? "#fff" : "#9cb0c5"; font.pixelSize: 12 }
+            Text { anchors.centerIn: parent; text: "队列" + root.queueCount; color: viewMode === "queue" ? "#fff" : (root.queueCount ? "#f39c12" : "#9cb0c5"); font.pixelSize: 12 }
             MouseArea { anchors.fill: parent; onClicked: { root.viewMode = "queue"; root.refreshQueue() } }
         }
     }
