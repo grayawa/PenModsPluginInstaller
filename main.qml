@@ -18,6 +18,11 @@ Rectangle {
             if (queueList[i].status === "queued" || queueList[i].status === "pending") c++
         return c > 0 ? "(" + c + ")" : ""
     }
+    property bool queueRunning: {
+        for (var i = 0; i < queueList.length; i++)
+            if (queueList[i].status === "installing") return true
+        return false
+    }
     property string selectedPluginId: ""
     property string statusText: backend.statusText
     property string searchText: ""
@@ -386,10 +391,24 @@ Rectangle {
             }
 
             Rectangle {
-                width: parent.width; height: 22; radius: 4; color: "#e74c3c"
+                width: parent.width; height: 22; radius: 4; color: queueRunning ? "#555" : "#e74c3c"
                 visible: root.queueList.length > 0
-                Text { anchors.centerIn: parent; text: "清空队列"; color: "#fff"; font.pixelSize: 11 }
-                MouseArea { anchors.fill: parent; onClicked: backend.clearQueue() }
+                Text { anchors.centerIn: parent; text: queueRunning ? "执行中..." : "清空队列"; color: "#fff"; font.pixelSize: 11 }
+                MouseArea { anchors.fill: parent; enabled: !root.queueRunning; onClicked: backend.clearQueue() }
+            }
+
+            Rectangle {
+                width: parent.width; height: 22; radius: 4; color: "#e67e22"
+                visible: root.queueRunning
+                Text { anchors.centerIn: parent; text: "停止全部"; color: "#fff"; font.pixelSize: 11 }
+                MouseArea {
+                    anchors.fill: parent
+                    onClicked: {
+                        for (var i = 0; i < root.queueList.length; i++)
+                            if (root.queueList[i].status === "installing")
+                                backend.stopQueueItem(root.queueList[i].id)
+                    }
+                }
             }
 
             Item { height: 4; width: 1 }
@@ -412,8 +431,13 @@ Rectangle {
                         }
                         Text {
                             anchors.verticalCenter: parent.verticalCenter; font.pixelSize: 10
-                            text: modelData.status === "failed" ? "失败" : (modelData.status === "queued" || modelData.status === "pending" ? "等待" : modelData.status)
-                            color: modelData.status === "failed" ? "#e74c3c" : (modelData.status === "queued" || modelData.status === "pending" ? "#f39c12" : "#4ade80")
+                            text: {
+                                if (modelData.status === "installing") return "执行中..."
+                                if (modelData.status === "failed") return "失败"
+                                if (modelData.status === "queued" || modelData.status === "pending") return "等待"
+                                return modelData.status
+                            }
+                            color: modelData.status === "installing" ? "#3498db" : (modelData.status === "failed" ? "#e74c3c" : (modelData.status === "queued" || modelData.status === "pending" ? "#f39c12" : "#4ade80"))
                         }
                         Rectangle {
                             anchors.verticalCenter: parent.verticalCenter; width: 18; height: 18; radius: 9

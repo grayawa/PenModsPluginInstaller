@@ -634,8 +634,10 @@ void InstallerBackend::performInstall(const QString &pluginId)
 
     const auto folderName = folderNameForId(pluginId);
     auto *reply = m_network.get(QNetworkRequest(QUrl(url)));
+    m_activeDownloads[pluginId] = reply;
     connect(reply, &QNetworkReply::finished, this, [this, reply, pluginId, folderName]() {
         reply->deleteLater();
+        m_activeDownloads.remove(pluginId);
 
         if (reply->error() != QNetworkReply::NoError) {
             const auto *plugin = findPlugin(pluginId);
@@ -831,7 +833,7 @@ QVariantList InstallerBackend::installQueue() const
     }
 
     QSqlQuery cq(m_database);
-    cq.exec(QStringLiteral("SELECT core_id, target_version, status, created_at, error_message FROM core_updates ORDER BY id DESC LIMIT 50"));
+    cq.exec(QStringLiteral("SELECT core_id, target_version, status, created_at, error_message FROM core_updates WHERE status != 'applied' ORDER BY id DESC LIMIT 50"));
     while (cq.next()) {
         QVariantMap item;
         item[QStringLiteral("id")] = cq.value(0);
@@ -873,8 +875,32 @@ void InstallerBackend::clearQueue()
     emit installedPluginsChanged();
 }
 
+void InstallerBackend::stopQueueItem(const QString &pluginId)
+{
+    if (m_activeDownloads.contains(pluginId)) {
+        m_activeDownloads[pluginId]->abort();
+        m_activeDownloads.remove(pluginId);
+    }
+    QSqlQuery q(m_database);
+    q.prepare(QStringLiteral("UPDATE install_queue SET status = 'queued' WHERE plugin_id = ? AND status = 'installing'"));
+    q.addBindValue(pluginId);
+    q.exec();
+    q.prepare(QStringLiteral("UPDATE core_updates SET status = 'pending' WHERE core_id = ? AND status = 'installing'"));
+    q.addBindValue(pluginId);
+    q.exec();
+    emit installStateChanged();
+}
+
 void InstallerBackend::executeQueueItem(const QString &pluginId)
 {
+    QSqlQuery mark(m_database);
+    mark.prepare(QStringLiteral("UPDATE install_queue SET status = 'installing' WHERE plugin_id = ? AND status = 'queued'"));
+    mark.addBindValue(pluginId);
+    mark.exec();
+    mark.prepare(QStringLiteral("UPDATE core_updates SET status = 'installing' WHERE core_id = ? AND status = 'pending'"));
+    mark.addBindValue(pluginId);
+    mark.exec();
+    emit installStateChanged();
     setStatusText(QStringLiteral("Executing: %1").arg(pluginId));
     performInstall(pluginId);
 }

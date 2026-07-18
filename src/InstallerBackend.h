@@ -3,6 +3,7 @@
 #include "PluginEntry.h"
 
 #include <QHash>
+#include <QMap>
 #include <QNetworkAccessManager>
 #include <QObject>
 #include <QSet>
@@ -42,6 +43,7 @@ public:
     Q_INVOKABLE QVariantList installQueue() const;
     Q_INVOKABLE void cancelQueueItem(const QString &pluginId, const QString &type);
     Q_INVOKABLE void clearQueue();
+    Q_INVOKABLE void stopQueueItem(const QString &pluginId);
     Q_INVOKABLE void executeQueueItem(const QString &pluginId);
     Q_INVOKABLE void uninstallPlugin(const QString &pluginId);
 
@@ -74,5 +76,6 @@ private:
     QNetworkAccessManager m_network;
     QSqlDatabase m_database;
     QList<PluginEntry> m_plugins;
+    QMap<QString, QNetworkReply *> m_activeDownloads;
     QString m_statusText;
 };
