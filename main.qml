@@ -73,9 +73,8 @@ Rectangle {
         if (m === "handoff") { backend.openDistribution(selectedPluginId); return }
         backend.install(selectedPluginId)
     }
-    function refreshInstalled() { installedList = backend.installedPlugins() }
+    function refreshInstalled() { installedList = backend.installedPlugins(); refreshQueue() }
     function refreshQueue() { queueList = backend.installQueue() }
-    function showKeyboard() {
     function showKeyboard() {
         var comp = qmlCreateComponent("YInputPage")
         if (comp.status !== Component.Ready) return
@@ -131,12 +130,6 @@ Rectangle {
             color: viewMode === "installed" ? "#2f6fed" : "#1a2330"
             Text { anchors.centerIn: parent; text: "已安装"; color: viewMode === "installed" ? "#fff" : "#9cb0c5"; font.pixelSize: 12 }
             MouseArea { anchors.fill: parent; onClicked: { root.viewMode = "installed"; root.refreshInstalled() } }
-        }
-        Rectangle {
-            width: 54; height: 32; radius: 4
-            color: viewMode === "queue" ? "#2f6fed" : "#1a2330"
-            Text { anchors.centerIn: parent; text: "队列"; color: viewMode === "queue" ? "#fff" : "#9cb0c5"; font.pixelSize: 12 }
-            MouseArea { anchors.fill: parent; onClicked: { root.viewMode = "queue"; root.refreshQueue() } }
         }
     }
 
@@ -304,6 +297,12 @@ Rectangle {
                 text: "已安装插件 (" + root.installedList.length + ")"
             }
 
+            Text {
+                width: parent.width; color: root.queueList.length > 0 ? "#f39c12" : "#7a8b9e"; font.pixelSize: 10
+                visible: root.queueList.length > 0
+                text: "队列: " + root.queueList.length + " 个待处理操作"
+            }
+
             Item { height: 6; width: 1 }
 
             ListView {
@@ -340,62 +339,6 @@ Rectangle {
                                 Text { anchors.centerIn: parent; text: "卸载"; color: "#f5f7fa"; font.pixelSize: 11 }
                                 MouseArea { anchors.fill: parent; onClicked: { backend.uninstallPlugin(modelData.id) } }
                             }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    // ── body: queue view ──
-    Rectangle {
-        visible: viewMode === "queue"
-        anchors.top: parent.top; anchors.topMargin: 4
-        anchors.left: leftTabs.right; anchors.leftMargin: 4
-        anchors.right: parent.right; anchors.rightMargin: 4
-        anchors.bottom: parent.bottom; anchors.bottomMargin: 4
-        color: "#17202b"; radius: 6; clip: true
-
-        Column {
-            anchors.fill: parent; anchors.margins: 4; spacing: 0
-
-            Text {
-                width: parent.width; color: "#f5f7fa"; font.pixelSize: 14; font.bold: true
-                text: "操作队列 (" + root.queueList.length + ")"
-            }
-
-            Item { height: 6; width: 1 }
-
-            ListView {
-                width: parent.width; height: parent.height - 34
-                model: root.queueList; clip: true
-                delegate: Rectangle {
-                    width: parent.width; height: 36; radius: 4
-                    color: index % 2 === 0 ? "#1a2330" : "transparent"
-
-                    Row {
-                        anchors.fill: parent; anchors.leftMargin: 10; anchors.rightMargin: 10; spacing: 8
-                        Text {
-                            anchors.verticalCenter: parent.verticalCenter; elide: Text.ElideRight
-                            text: {
-                                var op = modelData.type === "core-update" ? "核心更新" : (modelData.action || "安装")
-                                var name = modelData.id
-                                if (modelData.version) name += " v" + modelData.version
-                                return op + ": " + name
-                            }
-                            color: "#f5f7fa"; font.pixelSize: 12
-                        }
-                        Text {
-                            anchors.verticalCenter: parent.verticalCenter
-                            text: {
-                                var s = modelData.status
-                                if (s === "queued" || s === "pending") return "⏳ 等待中"
-                                if (s === "failed") return "❌ 失败"
-                                if (s === "installed") return "✓ 完成"
-                                return s
-                            }
-                            color: modelData.status === "failed" ? "#e74c3c" : (modelData.status === "installed" || modelData.status === "pending" ? "#4ade80" : "#9cb0c5")
-                            font.pixelSize: 11
                         }
                     }
                 }
