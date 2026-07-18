@@ -113,25 +113,25 @@ Rectangle {
         TextInput {
             id: searchInput
             anchors.fill: parent; anchors.margins: 4
-            color: "#f5f7fa"; font.pixelSize: 11; clip: true; readOnly: true
+            color: "#f5f7fa"; font.pixelSize: 11; clip: true
             Text {
                 anchors.fill: parent; text: "搜索插件"; color: "#555a65"
                 font.pixelSize: 11; visible: !searchInput.text
             }
             onTextChanged: { root.searchText = text; root.applyFilter() }
-        }
-        MouseArea {
-            anchors.fill: parent
-            onClicked: {
-                var comp = qmlCreateComponent("YInputPage")
-                if (comp.status !== Component.Ready) return
-                var incubator = comp.incubateObject(keyboardHelper.containerItem)
-                if (incubator.status !== Component.Ready) {
-                    incubator.onStatusChanged = function(s) {
-                        if (s === Component.Ready) keyboardHelper.inputPageCreated(incubator.object)
+            MouseArea {
+                anchors.fill: parent
+                onClicked: {
+                    var comp = qmlCreateComponent("YInputPage")
+                    if (comp.status !== Component.Ready) return
+                    var incubator = comp.incubateObject(keyboardHelper.containerItem)
+                    if (incubator.status !== Component.Ready) {
+                        incubator.onStatusChanged = function(s) {
+                            if (s === Component.Ready) keyboardHelper.inputPageCreated(incubator.object)
+                        }
+                    } else {
+                        keyboardHelper.inputPageCreated(incubator.object)
                     }
-                } else {
-                    keyboardHelper.inputPageCreated(incubator.object)
                 }
             }
         }
