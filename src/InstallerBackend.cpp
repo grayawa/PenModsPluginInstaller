@@ -20,6 +20,7 @@ InstallerBackend::InstallerBackend(QObject *parent)
     : QObject(parent)
 {
     ensureDatabase();
+    loadRegistryCache();
     setStatusText(QStringLiteral("Installer backend ready"));
 }
 
@@ -46,7 +47,10 @@ void InstallerBackend::refreshRegistry(const QUrl &registryUrl)
         reply->deleteLater();
 
         if (reply->error() != QNetworkReply::NoError) {
-            setStatusText(QStringLiteral("Registry request failed: %1").arg(reply->errorString()));
+            loadRegistryCache();
+            emit pluginsChanged();
+            emit installStateChanged();
+            setStatusText(QStringLiteral("Offline: using cached registry (%1 entries)").arg(m_plugins.size()));
             return;
         }
 
@@ -329,6 +333,28 @@ void InstallerBackend::cacheRegistryEntry(const PluginEntry &entry)
     query.addBindValue(entry.visibility);
     query.addBindValue(QString::fromUtf8(QJsonDocument(entry.raw).toJson(QJsonDocument::Compact)));
     query.exec();
+}
+
+void InstallerBackend::loadRegistryCache()
+{
+    m_plugins.clear();
+
+    if (!m_database.isOpen()) {
+        return;
+    }
+
+    QSqlQuery query(m_database);
+    if (!query.exec(QStringLiteral("SELECT raw_json FROM registry_cache"))) {
+        return;
+    }
+
+    while (query.next()) {
+        const auto document = QJsonDocument::fromJson(query.value(0).toString().toUtf8());
+        const auto entry = PluginEntry::fromJson(document.object());
+        if (!entry.id.isEmpty()) {
+            m_plugins.append(entry);
+        }
+    }
 }
 
 bool InstallerBackend::queueInstall(const PluginEntry &entry, const QString &status, const QString &errorMessage)

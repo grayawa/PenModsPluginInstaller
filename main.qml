@@ -1,5 +1,6 @@
 import QtQuick 2.12
 import PenMods.PluginInstaller 1.0
+import "qrc:/qml/commons"
 
 Rectangle {
     id: root
@@ -15,7 +16,6 @@ Rectangle {
     property var installedList: backend.installedPlugins()
     property string selectedPluginId: ""
     property string statusText: backend.statusText
-    property string searchText: ""
     property string planText: backend.installPlanText(selectedPluginId)
     property string actionLabel: "安装"
     property string viewMode: "registry"
@@ -112,17 +112,41 @@ Rectangle {
         TextInput {
             id: searchInput
             anchors.fill: parent; anchors.margins: 4
-            color: "#f5f7fa"; font.pixelSize: 11; clip: true
-            activeFocusOnPress: true
+            color: "#f5f7fa"; font.pixelSize: 11; clip: true; readOnly: true
             Text {
                 anchors.fill: parent; text: "搜索插件"; color: "#555a65"
                 font.pixelSize: 11; visible: !searchInput.text
             }
             onTextChanged: { root.searchText = text; root.applyFilter() }
-            MouseArea {
-                anchors.fill: parent
-                onClicked: { searchInput.forceActiveFocus(); searchInput.focus = true }
+        }
+        MouseArea {
+            anchors.fill: parent
+            onClicked: {
+                var comp = qmlCreateComponent("YInputPage")
+                if (comp.status !== Component.Ready) return
+                var incubator = comp.incubateObject(keyboardHelper.containerItem)
+                if (incubator.status !== Component.Ready) {
+                    incubator.onStatusChanged = function(s) {
+                        if (s === Component.Ready) keyboardHelper.inputPageCreated(incubator.object)
+                    }
+                } else {
+                    keyboardHelper.inputPageCreated(incubator.object)
+                }
             }
+        }
+    }
+
+    YPagePopHelper {
+        id: keyboardHelper
+        z: 99
+        function inputPageCreated(page) {
+            page.backButtonClicked.connect(function() { page.todoDestroy() })
+            page.inputFinished.connect(function(content) {
+                searchInput.text = content.trim()
+                page.todoDestroy()
+            })
+            page.enterText(searchInput.text)
+            page.show()
         }
     }
 
@@ -183,50 +207,38 @@ Rectangle {
             // title row
             Row {
                 id: detailTitleRow
-                anchors.top: parent.top; anchors.topMargin: 6
-                anchors.left: parent.left; anchors.leftMargin: 6; anchors.right: parent.right; anchors.rightMargin: 6
-                height: 17; spacing: 4
+                anchors.top: parent.top; anchors.topMargin: 4
+                anchors.left: parent.left; anchors.leftMargin: 5; anchors.right: parent.right; anchors.rightMargin: 5
+                height: 14; spacing: 4
                 Text {
                     text: root.currentPlugin ? root.currentPlugin.name : "未选择插件"
-                    color: "#f5f7fa"; font.pixelSize: 12; font.bold: true; elide: Text.ElideRight
+                    color: "#f5f7fa"; font.pixelSize: 11; font.bold: true; elide: Text.ElideRight
                 }
                 Rectangle {
-                    width: 40; height: 15; radius: 3; color: "#2f6fed"
+                    width: 36; height: 14; radius: 3; color: "#2f6fed"
                     visible: root.selectedPluginId !== "" && backend.isInstalled(root.selectedPluginId)
                     Text { anchors.centerIn: parent; text: "已安装"; color: "#f5f7fa"; font.pixelSize: 8 }
                 }
             }
 
-            // summary
+            // summary (1 line)
             Text {
                 id: detailSummary
-                anchors.top: detailTitleRow.bottom; anchors.topMargin: 2
-                anchors.left: parent.left; anchors.leftMargin: 6; anchors.right: parent.right; anchors.rightMargin: 6
-                height: 26; color: "#9cb0c5"; font.pixelSize: 9; wrapMode: Text.WordWrap; clip: true
+                anchors.top: detailTitleRow.bottom; anchors.topMargin: 1
+                anchors.left: parent.left; anchors.leftMargin: 5; anchors.right: parent.right; anchors.rightMargin: 5
+                color: "#9cb0c5"; font.pixelSize: 9; elide: Text.ElideRight; maximumLineCount: 1
                 text: root.currentPlugin ? (root.currentPlugin.summary || root.currentPlugin.description || "") : "从索引中选择一个插件。"
-            }
-
-            // meta info
-            Text {
-                id: detailMeta
-                anchors.top: detailSummary.bottom; anchors.left: parent.left; anchors.leftMargin: 6
-                anchors.right: parent.right; anchors.rightMargin: 6
-                color: "#7a8b9e"; font.pixelSize: 8; elide: Text.ElideRight
-                text: {
-                    if (!root.currentPlugin) return ""
-                    return root.currentPlugin.id + "  下载: " + root.selectedDownloadText()
-                }
             }
 
             // plan text (fills remaining space)
             Rectangle {
                 id: planBox
-                anchors.top: detailMeta.bottom; anchors.topMargin: 3
-                anchors.left: parent.left; anchors.leftMargin: 6; anchors.right: parent.right; anchors.rightMargin: 6
-                anchors.bottom: btnRow.top; anchors.bottomMargin: 4
+                anchors.top: detailSummary.bottom; anchors.topMargin: 2
+                anchors.left: parent.left; anchors.leftMargin: 5; anchors.right: parent.right; anchors.rightMargin: 5
+                anchors.bottom: btnRow.top; anchors.bottomMargin: 2
                 color: "#111821"; radius: 5; border.color: "#243243"
                 Text {
-                    anchors.fill: parent; anchors.margins: 3
+                    anchors.fill: parent; anchors.margins: 2
                     color: "#d7e2f0"; font.pixelSize: 9; wrapMode: Text.WordWrap
                     text: root.planText
                 }
@@ -235,21 +247,21 @@ Rectangle {
             // bottom buttons
             Row {
                 id: btnRow
-                anchors.bottom: parent.bottom; anchors.bottomMargin: 4
-                anchors.left: parent.left; anchors.leftMargin: 6; anchors.right: parent.right; anchors.rightMargin: 6
-                height: 22; spacing: 6
+                anchors.bottom: parent.bottom; anchors.bottomMargin: 3
+                anchors.left: parent.left; anchors.leftMargin: 5; anchors.right: parent.right; anchors.rightMargin: 5
+                height: 18; spacing: 4
 
                 Rectangle {
-                    width: parent.width / 2 - 3; height: 22; radius: 4; color: "#1d2b3a"; border.color: "#243243"
-                    Text { anchors.centerIn: parent; text: "刷新"; color: "#f5f7fa"; font.pixelSize: 10 }
+                    width: parent.width / 2 - 2; height: 18; radius: 4; color: "#1d2b3a"; border.color: "#243243"
+                    Text { anchors.centerIn: parent; text: "刷新"; color: "#f5f7fa"; font.pixelSize: 9 }
                     MouseArea { anchors.fill: parent; onClicked: root.refreshRegistry() }
                 }
                 Rectangle {
-                    width: parent.width / 2 - 3; height: 22; radius: 4
+                    width: parent.width / 2 - 2; height: 18; radius: 4
                     property bool inst: backend.isInstalled(root.selectedPluginId)
                     color: root.currentPlugin ? (inst ? "#c0392b" : "#2f6fed") : "#1a2330"
                     border.color: "#243243"; opacity: root.currentPlugin ? 1 : 0.5
-                    Text { anchors.centerIn: parent; text: root.actionLabel; color: "#f5f7fa"; font.pixelSize: 10 }
+                    Text { anchors.centerIn: parent; text: root.actionLabel; color: "#f5f7fa"; font.pixelSize: 9 }
                     MouseArea { anchors.fill: parent; enabled: root.currentPlugin !== null; onClicked: root.runInstallAction() }
                 }
             }

@@ -52,6 +52,7 @@ private:
 
     void setStatusText(const QString &statusText);
     void ensureDatabase();
+    void loadRegistryCache();
     void cacheRegistryEntry(const PluginEntry &entry);
     bool queueInstall(const PluginEntry &entry, const QString &status, const QString &errorMessage = QString());
     bool queueCoreUpdate(const PluginEntry &entry, const QString &status = QStringLiteral("pending"), const QString &errorMessage = QString());
