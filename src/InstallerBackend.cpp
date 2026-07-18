@@ -698,7 +698,10 @@ void InstallerBackend::installFromData(const QString &pluginId, const QString &f
                 queueCoreUpdate(*plugin, QStringLiteral("failed"), QStringLiteral("Copy libPenMods.so failed"));
                 setStatusText(QStringLiteral("Failed to copy libPenMods.so"));
             } else {
-                queueCoreUpdate(*plugin, QStringLiteral("pending"));
+                QSqlQuery upd(m_database);
+                upd.prepare(QStringLiteral("UPDATE core_updates SET status = 'applied', applied_at = CURRENT_TIMESTAMP WHERE core_id = ? AND status = 'pending'"));
+                upd.addBindValue(pluginId);
+                upd.exec();
                 setStatusText(QStringLiteral("Core update staged for %1; restart required").arg(pluginId));
             }
         } else {
@@ -765,7 +768,10 @@ void InstallerBackend::installFromData(const QString &pluginId, const QString &f
                 setStatusText(QStringLiteral("Failed to write libPenMods.so"));
             } else {
                 out.close();
-                queueCoreUpdate(*plugin, QStringLiteral("pending"));
+                QSqlQuery upd(m_database);
+                upd.prepare(QStringLiteral("UPDATE core_updates SET status = 'applied', applied_at = CURRENT_TIMESTAMP WHERE core_id = ? AND status = 'pending'"));
+                upd.addBindValue(pluginId);
+                upd.exec();
                 setStatusText(QStringLiteral("Core update staged for %1; restart required").arg(pluginId));
             }
         } else {
